@@ -1,0 +1,36 @@
+/models/
+/data/browser_profile/
+/models/*
+/models/.gitkeep
+# Модели (тяжелые)
+models/
+*.gguf
+*.bin
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+
+# Виртуальное окружение
+.venv/
+venv/
+
+# Python-мусор
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Логи и временные файлы
+*.log
+logs/
+tmp/
+
+# IDE
+.idea/
+.vscode/
+
+# ОС
+.DS_Store
+Thumbs.db
