@@ -34,3 +34,28 @@ tmp/
 # ОС
 .DS_Store
 Thumbs.db
+
+# Исходные спрайты (не храним в репозитории, используем готовые кадры)
+assets/raw/
+
+# Промежуточные ассеты из tools/
+assets/clean/
+assets/frames/
+assets/characters/*/sheets/
+
+# Qt / QML кэш
+*.qmlc
+*.jsc
+qmlcache/
+
+# Ruff
+.ruff_cache/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Coverage
+.coverage
+htmlcov/
