@@ -44,6 +44,7 @@ class Agent:
             [Character],
             None
         ] | None = None,
+
     ):
         self.character = character
         self.llm = llm
