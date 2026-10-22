@@ -1,8 +1,10 @@
+# agent.py
 import json
 from typing import Callable
 
-from app.ai.tools import (
+from .web_tools import (
     WebSearchTool,
+    EdgeSearchTool,
     BrowserManager,
     BrowserOpenTool,
     BrowserReadTool,
@@ -59,9 +61,9 @@ class Agent:
         # Отдельный профиль браузера Desktop Pet.
         self.browser = BrowserManager()
 
-        # Инструменты, которые разрешено вызывать модели.
         self.tools = {
             "web_search": WebSearchTool(),
+            "edge_search": EdgeSearchTool(),
             "browser_open": BrowserOpenTool(self.browser),
             "browser_read": BrowserReadTool(self.browser),
             "browser_type": BrowserTypeTool(self.browser),
@@ -80,9 +82,9 @@ class Agent:
         return tool.execute(**kwargs)
 
     def _execute_tool_call(
-        self,
-        name: str,
-        arguments: dict,
+            self,
+            name: str,
+            arguments: dict,
     ):
         """
         Выполнить вызов модели.
@@ -104,8 +106,7 @@ class Agent:
             **arguments,
         )
 
-    def _tool_schemas(self) -> list[dict]:
-        """Сформировать описания инструментов для локальной модели."""
+    def _tool_schemas(self):
         return [
             tool.to_openai_tool()
             for tool in self.tools.values()

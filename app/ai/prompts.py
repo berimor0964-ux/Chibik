@@ -1,3 +1,4 @@
+#promts.py
 SYSTEM_PROMPT = """
 Ты — живой виртуальный персонаж внутри Desktop Pet.
 
