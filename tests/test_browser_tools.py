@@ -1,60 +1,24 @@
 
-import sys
-from pathlib import Path
+from app.ai.web_tools import WebSearchTool
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+tool = WebSearchTool()
 
-from app.ai.tools import (
-    WebSearchTool,
-    BrowserManager,
-)
+try:
+    result = tool.execute(
+        query="официальная документация Python",
+        max_results=5,
+    )
 
+    print("Источник поиска:", result["source"])
+    print("Количество попыток:", result["attempts"])
+    print()
 
-def main():
-    query = input("Что ищем? ").strip()
+    for index, item in enumerate(result["results"], start=1):
+        print(f"{index}. {item['title']}")
+        print("URL:", item["url"])
+        print("Описание:", item["snippet"])
+        print()
 
-    search = WebSearchTool()
-    results = search.execute(query=query)
-
-    for index, result in enumerate(results["results"], start=1):
-        print(f"\n{index}. {result['title']}")
-        print(result["url"])
-        print(result["snippet"])
-
-    if not results["results"]:
-        print("Поиск не вернул результатов.")
-        return
-
-    browser = BrowserManager()
-
-    try:
-        choice = input(
-            "\nВведи номер результата для открытия "
-            "(Enter — пропустить): "
-        ).strip()
-
-        if not choice:
-            return
-
-        index = int(choice) - 1
-        if index < 0 or index >= len(results["results"]):
-            print("Неверный номер.")
-            return
-
-        opened = browser.open(results["results"][index]["url"])
-        print("\nОткрыта страница:", opened["title"])
-
-        page = browser.read()
-        print("\nТекст страницы:\n")
-        print(page["text"])
-
-        input("\nНажми Enter, чтобы закрыть браузер...")
-
-    finally:
-        browser.close()
-
-
-if __name__ == "__main__":
-    main()
+except Exception as error:
+    print("ПОИСК НЕ УДАЛСЯ:")
+    print(error)
