@@ -4,29 +4,22 @@ import QtQuick.Window
 Window {
     id: root
 
-    // ===== ФЛАГИ ОКНА =====
-    flags: Qt.Window
-         | Qt.FramelessWindowHint
-         | Qt.WindowStaysOnTopHint
-         | Qt.Tool
-         | Qt.NoDropShadowWindowHint
-
+    flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.NoDropShadowWindowHint
     color: "transparent"
     visible: false
 
-    width: 180
-    height: column.height + 8
-
-    signal actionSelected(string action)
-
-    // ===== АВТОЗАКРЫТИЕ ПРИ ПОТЕРЕ ФОКУСА =====
+    // Закрываем меню, если оно потеряло фокус (кликнули мимо)
     onActiveChanged: {
         if (!active && visible) {
             close()
         }
     }
 
-    // ===== ВНЕШНИЙ ВИД =====
+    width: 180
+    height: column.height + 8
+
+    signal actionSelected(string action)
+
     Rectangle {
         anchors.fill: parent
         color: "#2b2b2b"
@@ -43,23 +36,21 @@ Window {
             spacing: 2
 
             Repeater {
-                model: [
+                    model: [
                     { text: "Поговорить",  action: "talk" },
                     { text: "Покормить",   action: "feed" },
-                    { text: "Поиграть",    action: "play" },
                     { separator: true },
                     { text: "Состояние",   action: "state" },
                     { text: "Память",      action: "memory" },
-                    { separator: true },
                     { text: "Настройки",   action: "settings" },
+                    { separator: true },
                     { text: "Выход",       action: "quit" }
                 ]
 
                 delegate: Item {
                     width: column.width
-                    height: modelData.separator ? 9 : 32
+                    height: modelData.separator ? 9 : 36
 
-                    // Разделитель
                     Rectangle {
                         visible: modelData.separator === true
                         anchors.centerIn: parent
@@ -68,7 +59,6 @@ Window {
                         color: "#555"
                     }
 
-                    // Пункт
                     Rectangle {
                         visible: !modelData.separator
                         anchors.fill: parent
@@ -82,7 +72,8 @@ Window {
                             verticalAlignment: Text.AlignVCenter
                             text: modelData.text || ""
                             color: "white"
-                            font.pixelSize: 14
+                            font.family: "Minecraft Default"
+                            font.pixelSize: 16
                         }
 
                         MouseArea {
@@ -90,13 +81,8 @@ Window {
                             anchors.fill: parent
                             hoverEnabled: true
                             onClicked: {
-                                var act = modelData.action
                                 root.close()
-                                if (act === "quit") {
-                                    Qt.quit()
-                                } else {
-                                    root.actionSelected(act)
-                                }
+                                root.actionSelected(modelData.action)
                             }
                         }
                     }
@@ -105,13 +91,11 @@ Window {
         }
     }
 
-    // ===== ESC =====
     Shortcut {
         sequence: "Escape"
         onActivated: root.close()
     }
 
-    // ===== ОТКРЫТИЕ =====
     function openAt(globalX, globalY) {
         var menuW = root.width
         var menuH = root.height
@@ -122,7 +106,7 @@ Window {
         root.y = Math.min(Math.max(0, globalY), maxY)
 
         root.visible = true
-        root.requestActivate()   // ← фокус для автозакрытия
+        root.requestActivate()
     }
 
     function close() {

@@ -6,16 +6,20 @@ Item {
     width: 128
     height: 128
 
-    // ===== Данные =====
+    // Данные
     property string characterId: ""
     property string currentState: "idle"
     property string direction: "right"
     property var targetWindow: null
 
+    // Ссылки и состояния
+    property var speechBubble: null
+    property bool wasDragged: false
+
     property alias contextMenu: contextMenu
     signal actionRequested(string action)
 
-    // ===== Пути =====
+    // Пути
     readonly property string framesPath:
         "file:///" + assetsPath + "/characters/chibik"
 
@@ -33,7 +37,6 @@ Item {
         return framesPath + "/" + currentSpriteName + "_" + frame + ".png"
     }
 
-    // ===== Спрайт =====
     Image {
         anchors.fill: parent
         source: root.currentFile
@@ -43,7 +46,6 @@ Item {
         asynchronous: true
     }
 
-    // ===== Анимация =====
     Timer {
         interval: {
             switch (root.currentState) {
@@ -58,7 +60,6 @@ Item {
         onTriggered: root.frameIndex = root.frameIndex === 1 ? 2 : 1
     }
 
-    // ===== Меню =====
     ContextMenu {
         id: contextMenu
         onActionSelected: (action) => {
@@ -67,7 +68,6 @@ Item {
         }
     }
 
-    // ===== Мышь =====
     MouseArea {
         id: dragArea
         anchors.fill: parent
@@ -80,15 +80,12 @@ Item {
         property real startWindowY: 0
 
         onPressed: (mouse) => {
-            // Правый клик — открыть меню
             if (mouse.button === Qt.RightButton) {
                 var gp = dragArea.mapToGlobal(mouse.x, mouse.y)
                 contextMenu.openAt(gp.x, gp.y)
                 return
             }
 
-            // Левый клик — перетаскивание
-            // ВАЖНО: закрываем меню, если оно открыто
             if (contextMenu.visible) {
                 contextMenu.close()
             }
@@ -97,6 +94,8 @@ Item {
                 console.warn("targetWindow не передан из Main.qml!")
                 return
             }
+
+            root.wasDragged = false
             cursorShape = Qt.ClosedHandCursor
 
             startWindowX = root.targetWindow.x
@@ -116,13 +115,26 @@ Item {
             var dx = gp.x - startMouseGlobalX
             var dy = gp.y - startMouseGlobalY
 
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                root.wasDragged = true
+
+                // ИСПРАВЛЕНО: Скрываем облако при перетаскивании
+                if (root.speechBubble) {
+                    root.speechBubble.hideBubble()
+                }
+            }
+
             root.targetWindow.x = startWindowX + dx
             root.targetWindow.y = startWindowY + dy
         }
 
         onReleased: (mouse) => {
-            if (mouse.button === Qt.LeftButton) {
-                cursorShape = Qt.OpenHandCursor
+            if (mouse.button !== Qt.LeftButton) return
+            cursorShape = Qt.OpenHandCursor
+
+            if (!root.wasDragged && !contextMenu.visible && root.speechBubble) {
+                var gp = dragArea.mapToGlobal(root.width / 2, 0)
+                root.speechBubble.showBubble(gp.x, gp.y, "Мяу!")
             }
         }
     }
