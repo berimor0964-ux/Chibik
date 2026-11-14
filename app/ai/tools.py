@@ -1,4 +1,4 @@
-
+#tools.py
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -9,6 +9,8 @@ from urllib.parse import parse_qs, urlparse
 import ipaddress
 import os
 import socket
+import subprocess
+import sys
 
 import requests
 from playwright.sync_api import sync_playwright, Error as PlaywrightError

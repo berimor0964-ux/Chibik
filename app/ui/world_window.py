@@ -1,4 +1,3 @@
-
 """Графический интерфейс виртуального мира Chibik."""
 from __future__ import annotations
 

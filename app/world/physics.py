@@ -1,4 +1,3 @@
-
 """Простая двумерная физика игрового мира."""
 
 from .objects import WorldObject

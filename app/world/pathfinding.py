@@ -1,4 +1,3 @@
-
 """Поиск пути в двумерной зоне с помощью алгоритма A*."""
 
 from heapq import heappop, heappush

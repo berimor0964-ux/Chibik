@@ -1,3 +1,4 @@
+#behavior.py
 from .actions import Action, ActionType
 from .goals import Goal, GoalType
 from .character import Character

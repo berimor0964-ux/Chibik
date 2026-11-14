@@ -1,4 +1,3 @@
-
 """Навигация объектов по зонам игрового мира."""
 
 from .objects import WorldObject

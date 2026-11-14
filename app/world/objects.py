@@ -1,4 +1,3 @@
-
 """Базовые объекты игрового мира."""
 
 from dataclasses import dataclass, field
