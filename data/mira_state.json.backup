@@ -1,0 +1,53 @@
+{
+  "saved_at": "2026-11-10T18:02:08",
+  "position": {
+    "x": 6.0,
+    "y": 3.0
+  },
+  "mood": "скучающее",
+  "needs": {
+    "hunger": 30.399999999999967,
+    "energy": 31.499999999999282,
+    "fun": 0.0,
+    "social": 0.0,
+    "hygiene": 45.50000000000061,
+    "comfort": 6.999999999999551
+  },
+  "personality": {
+    "friendliness": 50.0,
+    "curiosity": 50.0,
+    "laziness": 50.0,
+    "humor": 50.0,
+    "chaos": 50.0,
+    "intelligence": 50.0,
+    "bravery": 50.0,
+    "traits": [
+      "любопытная",
+      "добрая",
+      "немного упрямая"
+    ],
+    "backstory": "Живёт в своей уютной комнате и любит исследовать её.",
+    "behavior_style": "дружелюбная, живая, любознательная",
+    "likes": [],
+    "dislikes": [],
+    "rules": []
+  },
+  "memories": [
+    {
+      "content": "Привет",
+      "type": "short_term",
+      "importance": 35.0,
+      "metadata": {
+        "type": "user_message"
+      }
+    },
+    {
+      "content": "Пользователь: Привет\nПерсонаж: О, ты вернулся! Как дела?",
+      "type": "episodic",
+      "importance": 40.0,
+      "metadata": {
+        "type": "conversation"
+      }
+    }
+  ]
+}
