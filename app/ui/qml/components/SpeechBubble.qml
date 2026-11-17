@@ -3,16 +3,13 @@ import QtQuick.Window
 
 Window {
     id: root
-    flags: Qt.Window | Qt.FramelessWindowHint
-         | Qt.WindowStaysOnTopHint | Qt.Tool
-         | Qt.WindowTransparentForInput
-         | Qt.NoDropShadowWindowHint
+    flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.WindowTransparentForInput | Qt.NoDropShadowWindowHint
     color: "transparent"
     visible: false
 
     property string fullText: ""
     property int visibleChars: 0
-    property int maxWidth: 240
+    property int maxWidth: 260
     property int charDelay: 40
     property int hideDelay: 5000
     property real anchorX: 0
@@ -22,53 +19,73 @@ Window {
 
     TextMetrics {
         id: fullMetrics
-        font.family: "Minecraft Default"
+        font.family: "Segoe UI"
         font.pixelSize: 16
         text: root.fullText
     }
 
-    width: Math.min(maxWidth, fullMetrics.width + 32)
-    height: fullMetrics.height + 32
+    width: Math.min(maxWidth, fullMetrics.width + 44)
+    height: fullMetrics.height + 40
+
+    // Мягкая тень
+    Rectangle {
+        anchors.fill: bubble
+        anchors.topMargin: 4
+        anchors.leftMargin: 4
+        z: -1
+        color: "#20d87093"
+        radius: bubble.radius
+    }
 
     Rectangle {
         id: bubble
         anchors.fill: parent
-        anchors.bottomMargin: 16
-        color: "#f4e4c1"
-        border.color: "#2d1b0e"
+        anchors.bottomMargin: 22
+        color: "#fff0f5"
+        border.color: "#ffb6c1"
         border.width: 3
+        radius: 22
+
+        // Блик в углу
+        Rectangle {
+            x: 8; y: 8; width: 20; height: 8
+            color: "#ffffff"
+            radius: 4
+            opacity: 0.6
+        }
 
         Text {
             anchors.fill: parent
-            anchors.margins: 12
+            anchors.margins: 16
             text: root.displayText
-            color: "#2d1b0e"
-            font.family: "Minecraft Default"
+            color: "#d87093"
+            font.family: "Segoe UI"
             font.pixelSize: 16
             wrapMode: Text.WordWrap
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
         }
 
-        Canvas {
+        // Хвостик из двух кружков (облачный)
+        Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.top: parent.bottom
-            width: 20; height: 16
-            y: -3
-            onPaint: {
-                var ctx = getContext("2d")
-                ctx.reset()
-                ctx.beginPath()
-                ctx.moveTo(0, 0)
-                ctx.lineTo(20, 0)
-                ctx.lineTo(10, 14)
-                ctx.closePath()
-                ctx.fillStyle = "#f4e4c1"
-                ctx.fill()
-                ctx.lineWidth = 3
-                ctx.strokeStyle = "#2d1b0e"
-                ctx.stroke()
-            }
+            anchors.topMargin: -4
+            width: 16; height: 16
+            color: "#fff0f5"
+            radius: 8
+            border.color: "#ffb6c1"
+            border.width: 3
+        }
+        Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: parent.bottom
+            anchors.topMargin: 8
+            width: 10; height: 10
+            color: "#fff0f5"
+            radius: 5
+            border.color: "#ffb6c1"
+            border.width: 3
         }
     }
 
@@ -110,11 +127,9 @@ Window {
     function updatePosition() {
         var w = root.width, h = root.height
         var targetX = anchorX - (w / 2)
-        var targetY = anchorY - h + 16
-        root.x = Math.min(Math.max(0, targetX),
-                          Screen.desktopAvailableWidth - w)
-        root.y = Math.min(Math.max(0, targetY),
-                          Screen.desktopAvailableHeight - h)
+        var targetY = anchorY - h + 22
+        root.x = Math.min(Math.max(0, targetX), Screen.desktopAvailableWidth - w)
+        root.y = Math.min(Math.max(0, targetY), Screen.desktopAvailableHeight - h)
     }
 
     function hideBubble() {

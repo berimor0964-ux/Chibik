@@ -25,8 +25,9 @@ SPRITE_SIZE = 128
 class DesktopWalkTool:
     name = "desktop_walk"
     description = (
-        "Переместить Миру в другую точку рабочего стола. Координаты x и y "
-        "измеряются клетками по 32 пикселя от левого верхнего угла."
+        "Переместить Миру в точку на рабочем столе. "
+        "Координаты x и y измеряются клетками по 32 пикселя. "
+        "Мира ходит только по полу/траве (нижняя часть окна)."
     )
 
     def __init__(self, controller):
@@ -37,7 +38,7 @@ class DesktopWalkTool:
             "type": "object",
             "properties": {
                 "x": {"type": "integer", "description": "Целевая клетка по горизонтали"},
-                "y": {"type": "integer", "description": "Целевая клетка по вертикали"},
+                "y": {"type": "integer", "description": "Целевая клетка по вертикали (только пол/трава)"},
             },
             "required": ["x", "y"],
             "additionalProperties": False,
@@ -54,14 +55,8 @@ class DesktopWalkTool:
         }
 
     def execute(self, x: int, y: int) -> dict:
-        max_x = max(0, self.controller.grid_width - int(self.controller.pet.width))
-        max_y = max(0, self.controller.grid_height - int(self.controller.pet.height))
-        x, y = int(x), int(y)
-        if not (0 <= x <= max_x and 0 <= y <= max_y):
-            return {"status": "rejected", "reason": "Координаты за границами",
-                    "max_x": max_x, "max_y": max_y}
-        self.controller.walkRequested.emit(x, y)
-        return {"status": "movement_requested", "x": x, "y": y}
+        self.controller.walkRequested.emit(int(x), int(y))
+        return {"status": "movement_requested", "x": int(x), "y": int(y)}
 
 
 class DesktopWorldController(QObject):
@@ -89,8 +84,13 @@ class DesktopWorldController(QObject):
         self.grid_width = max(8, self.geometry.width() // CELL_SIZE)
         self.grid_height = max(8, self.geometry.height() // CELL_SIZE)
 
-        # Ограничение блуждания только полом (нижние 38% высоты)
-        self.floor_y_min = max(0, int(self.grid_height * 0.62))
+        # Зоны перемещения
+        self.floor_y_min = int(self.grid_height * 0.64)
+        self.outdoor_y_min = int(self.grid_height * 0.62)
+
+        # Кровать (на полу, чуть выше)
+        self.bed_x = 3.0
+        self.bed_y = float(self.floor_y_min) - 1.5
 
         self.world = World("Рабочий стол")
         self.zone = Zone("Рабочий стол",
@@ -106,8 +106,6 @@ class DesktopWorldController(QObject):
         self.world.add_object(self.zone.name, self.pet)
 
         self.character = Character(name="Мира", age=1)
-
-        # Агент (ОБЯЗАТЕЛЬНО до использования self.agent.tools)
         self.agent = self._create_agent(self.character)
 
         self.walkRequested.connect(self.request_walk_to)
@@ -125,20 +123,19 @@ class DesktopWorldController(QObject):
         self._behavior_elapsed = 0.0
         self._wander_elapsed = 0.0
         self._sleeping = False
+        self._pending_sleep = False
+        self._on_bed = False
         self._temporary_state_time = 0.0
 
-        # Логика комнат
         self._scene_mode = "room"
         self._transition_after_path = None
         self._random = random.Random()
 
-        # Таймер
         self.timer = QTimer(self)
         self.timer.setInterval(16)
         self.timer.timeout.connect(self.tick)
         self.timer.start()
 
-        # База данных (в try/except, чтобы не блокировать запуск)
         self.db = None
         try:
             from app.database.database import Database
@@ -146,13 +143,12 @@ class DesktopWorldController(QObject):
             self.db.create_character("mira", self.character.name, self.character.age)
             self.db.set_active_character("mira")
             self._load_from_db()
-            # Автосохранение каждые 60 секунд
             self._autosave_timer = QTimer(self)
             self._autosave_timer.setInterval(60_000)
             self._autosave_timer.timeout.connect(self._save_to_db)
             self._autosave_timer.start()
         except Exception as e:
-            print(f"Предупреждение: БД недоступна, работаем без сохранения: {e}")
+            print(f"Предупреждение: БД недоступна: {e}")
 
         QTimer.singleShot(0, self._emit_position)
         self._emit_state()
@@ -167,8 +163,7 @@ class DesktopWorldController(QObject):
             try:
                 llm = LocalLLM()
             except Exception as error:
-                print(f"Предупреждение: локальная LLM недоступна. Причина: {error}",
-                      flush=True)
+                print(f"Предупреждение: локальная LLM недоступна: {error}", flush=True)
         return Agent(character=character, llm=llm, planner=Planner())
 
     @property
@@ -182,6 +177,14 @@ class DesktopWorldController(QObject):
     @property
     def scene_mode(self) -> str:
         return self._scene_mode
+
+    def _walkable_y_min(self) -> int:
+        return self.floor_y_min if self._scene_mode == "room" else self.outdoor_y_min
+
+    def _clamp_y(self, y: float) -> float:
+        max_y = max(0.0, float(self.grid_height - int(self.pet.height)))
+        min_y = float(self._walkable_y_min())
+        return max(min_y, min(max_y, float(y)))
 
     def _emit_position(self) -> None:
         x = self.geometry.x() + round(self.pet.x * CELL_SIZE)
@@ -211,11 +214,12 @@ class DesktopWorldController(QObject):
         gx = (x - self.geometry.x()) / CELL_SIZE
         gy = (y - self.geometry.y()) / CELL_SIZE
         gx = min(max(0.0, gx), self.zone.width - self.pet.width)
-        gy = min(max(0.0, gy), self.zone.height - self.pet.height)
+        gy = self._clamp_y(gy)
         self.pet.x, self.pet.y = gx, gy
         self._path.clear()
         self._path_index = 0
         self._transition_after_path = None
+        self._on_bed = False
         self._set_state("idle")
         self._emit_position()
 
@@ -229,19 +233,19 @@ class DesktopWorldController(QObject):
                     target_y: int | None = None) -> bool:
         max_x = max(0, self.grid_width - int(self.pet.width))
         max_y = max(0, self.grid_height - int(self.pet.height))
+        min_y = self._walkable_y_min()
 
         if target_x is None:
             target_x = self._random.randint(0, max_x)
         if target_y is None:
-            # В комнате Мира ходит только по полу
-            if self._scene_mode == "room":
-                target_y = self._random.randint(self.floor_y_min, max_y)
-            else:
-                target_y = self._random.randint(0, max_y)
+            target_y = self._random.randint(min_y, max_y)
+        else:
+            target_y = int(self._clamp_y(target_y))
+
+        target_x = int(max(0, min(max_x, target_x)))
 
         start = (round(self.pet.x), round(self.pet.y))
-        target = (float(min(max_x, max(0, target_x))),
-                  float(min(max_y, max(0, target_y))))
+        target = (float(target_x), float(target_y))
 
         if abs(self.pet.x - start[0]) > 1e-6 or abs(self.pet.y - start[1]) > 1e-6:
             self.pet.x, self.pet.y = float(start[0]), float(start[1])
@@ -261,14 +265,21 @@ class DesktopWorldController(QObject):
         self._set_state("walk")
         return True
 
-    # ========== ЛОГИКА ДВЕРИ ==========
+    # ========== ЛОГИКА ДВЕРИ И ПРОГУЛКИ ==========
 
     def request_walk(self) -> None:
-        """Мира доходит до левой двери и выходит во двор."""
+        """Мира выходит через дверь во двор."""
         self._sleeping = False
+        self._pending_sleep = False
+        self._on_bed = False
+        # === ПРИНУДИТЕЛЬНЫЙ СБРОС ПУТИ ===
+        self._path.clear()
+        self._path_index = 0
+        self._transition_after_path = None
+
         if self._scene_mode == "room":
-            door_x = 1.0  # Дверь слева
-            door_y = max(0, self.grid_height - int(self.pet.height))
+            door_x = 1.0
+            door_y = float(self.floor_y_min)
             self._transition_after_path = "outside"
             if not self._start_walk(door_x, door_y):
                 self._enter_outside()
@@ -276,23 +287,32 @@ class DesktopWorldController(QObject):
             self._start_walk()
 
     def request_home(self) -> None:
-        """Мира возвращается к левой двери и входит в комнату."""
+        """Мира возвращается домой через дверь."""
         self._sleeping = False
+        self._pending_sleep = False
+        self._on_bed = False
+        # === ПРИНУДИТЕЛЬНЫЙ СБРОС ПУТИ ===
+        self._path.clear()
+        self._path_index = 0
+        self._transition_after_path = None
+
         if self._scene_mode == "room":
             self.speechRequested.emit("Я уже дома! ♥")
             return
-        door_x = 1.0  # Дверь слева
-        door_y = max(0, self.grid_height - int(self.pet.height))
+
+        door_x = 1.0
+        door_y = float(self.outdoor_y_min)
         self._transition_after_path = "room"
         if not self._start_walk(door_x, door_y):
             self._enter_room()
 
     def _enter_outside(self) -> None:
-        """Мира вышла через левую дверь."""
+        """Мира вышла через дверь во двор."""
         self._transition_after_path = None
         self._scene_mode = "outside"
-        self.pet.x = 2.0  # Чуть правее двери
-        self.pet.y = float(max(0, self.grid_height - int(self.pet.height)))
+        self.pet.x = 2.0
+        self.pet.y = float(self.outdoor_y_min)
+        self._on_bed = False
         self.sceneChanged.emit(self._scene_mode)
         self._emit_position()
         self._set_state("idle")
@@ -300,16 +320,16 @@ class DesktopWorldController(QObject):
         self._start_walk()
 
     def _enter_room(self) -> None:
-        """Мира вошла через левую дверь в комнату."""
+        """Мира вошла через дверь в комнату."""
         self._transition_after_path = None
         self._scene_mode = "room"
-        self.pet.x = 1.0  # У левой двери
-        self.pet.y = float(max(0, self.grid_height - int(self.pet.height)))
+        self.pet.x = 1.0
+        self.pet.y = float(self.floor_y_min)
+        self._on_bed = False
         self.sceneChanged.emit(self._scene_mode)
         self._emit_position()
         self._set_state("idle")
         self._wander_elapsed = 0.0
-        # Через полсекунды идёт в центр комнаты
         QTimer.singleShot(500, lambda: self._start_walk(
             max(0, self.grid_width // 2 - 2),
             self._random.randint(self.floor_y_min,
@@ -317,30 +337,61 @@ class DesktopWorldController(QObject):
         ))
 
     def request_walk_to(self, x: int, y: int) -> None:
+        """Перемещение по запросу LLM или пользователя."""
         self._sleeping = False
+        self._pending_sleep = False
+        self._on_bed = False
         self._transition_after_path = None
         if not self._start_walk(int(x), int(y)):
-            self.speechRequested.emit("Я не смогла найти безопасный путь туда.")
+            self.speechRequested.emit("Я не смогла найти путь туда.")
 
     def perform_action(self, action: str) -> str:
         action = (action or "").lower()
         needs = self.character.needs
 
+        # === СБРОС ТЕКУЩЕГО БЛУЖДАНИЯ ПРИ ЛЮБОМ ДЕЙСТВИИ ===
+        if action not in ("", None):
+            self._path.clear()
+            self._path_index = 0
+            self._wander_elapsed = 0.0
+
         if action in ("walk", "explore"):
             self.request_walk()
-            self.speechRequested.emit("Пойду немного прогуляюсь!")
+            self.speechRequested.emit("Пойду прогуляюсь! 🚶")
         elif action == "home":
             self.request_home()
-            self.speechRequested.emit("Возвращаюсь домой!")
+            self.speechRequested.emit("Возвращаюсь домой! 🏠")
         elif action == "sleep":
+            self._pending_sleep = False
+            # === ПРИНУДИТЕЛЬНЫЙ СБРОС ПУТИ ===
             self._path.clear()
+            self._path_index = 0
             self._transition_after_path = None
-            self._sleeping = True
-            self._set_state("sleep")
-            self.speechRequested.emit("Пора поспать…")
+
+            if self._scene_mode == "outside":
+                self.request_home()
+                self.speechRequested.emit("Сначала вернусь домой... 🏠")
+                return action
+
+            distance_to_bed = math.hypot(self.pet.x - self.bed_x,
+                                         self.pet.y - self.bed_y)
+
+            if distance_to_bed > 2.0:
+                self.speechRequested.emit("Пойду к кровати... 💤")
+                self._start_walk(int(self.bed_x), int(self.bed_y))
+                self._pending_sleep = True
+            else:
+                self._sleeping = True
+                self._on_bed = True
+                self.pet.y = self.bed_y
+                self._set_state("sleep")
+                self.speechRequested.emit("Спокойной ночи... 💤")
+                self._emit_position()
         elif action == "feed":
             needs.change_hunger(35)
             self._sleeping = False
+            self._pending_sleep = False
+            self._on_bed = False
             if self._state == "sleep":
                 self._set_state("idle")
             self.speechRequested.emit("Спасибо за угощение! ♥")
@@ -399,8 +450,11 @@ class DesktopWorldController(QObject):
                 needs.change_energy(2.5 * elapsed)
                 if needs.energy >= 80:
                     self._sleeping = False
+                    self._on_bed = False
+                    self.pet.y = float(self.grid_height - 4)
                     self._set_state("idle")
-                    self.speechRequested.emit("Я выспалась!")
+                    self.speechRequested.emit("Я выспалась! ☀️")
+                    self._emit_position()
             self._emit_needs()
 
         if self._behavior_elapsed >= 1.0:
@@ -429,6 +483,8 @@ class DesktopWorldController(QObject):
                 nx = self.pet.x + dx / distance * step
                 ny = self.pet.y + dy / distance * step
 
+            ny = self._clamp_y(ny)
+
             if Physics.can_move(self.pet, self.zone, nx, ny):
                 self.pet.x, self.pet.y = nx, ny
                 if self.auto_rotate:
@@ -451,6 +507,16 @@ class DesktopWorldController(QObject):
                     self._enter_room()
                 else:
                     self._set_state("idle")
+
+                if self._pending_sleep:
+                    self._sleeping = True
+                    self._on_bed = True
+                    self.pet.y = self.bed_y
+                    self._set_state("sleep")
+                    self.speechRequested.emit("Спокойной ночи... 💤")
+                    self._pending_sleep = False
+                    self._emit_position()
+
                 self._wander_elapsed = 0.0
 
         elif self._state != "sleep" and self._wander_elapsed >= 9.0:
@@ -461,10 +527,25 @@ class DesktopWorldController(QObject):
         needs = self.character.needs
 
         if action_type == ActionType.SLEEP and not self._sleeping:
-            self._sleeping = True
-            self._path.clear()
-            self._set_state("sleep")
-            self.speechRequested.emit("Я устала, немного посплю.")
+            if self._scene_mode == "outside":
+                self.request_home()
+                return
+            distance_to_bed = math.hypot(self.pet.x - self.bed_x,
+                                         self.pet.y - self.bed_y)
+            if distance_to_bed > 2.0:
+                self.speechRequested.emit("Пойду к кровати... 💤")
+                self._start_walk(int(self.bed_x), int(self.bed_y))
+                self._pending_sleep = True
+            else:
+                self._sleeping = True
+                self._on_bed = True
+                self._path.clear()
+                self.pet.y = self.bed_y
+                self._set_state("sleep")
+                self.speechRequested.emit("Спокойной ночи... 💤")
+                self._pending_sleep = False
+                self._emit_position()
+
         elif action_type == ActionType.EAT:
             self._path.clear()
             needs.change_hunger(35)
@@ -499,7 +580,6 @@ class DesktopWorldController(QObject):
     # ========== БАЗА ДАННЫХ ==========
 
     def _load_from_db(self) -> None:
-        """Загружает состояние из БД в персонажа."""
         if not self.db:
             return
         try:
@@ -513,8 +593,8 @@ class DesktopWorldController(QObject):
                 needs.hygiene = state["hygiene"]
                 needs.comfort = state["comfort"]
                 self.pet.x = state["pos_x"]
-                self.pet.y = state["pos_y"]
                 self._scene_mode = state.get("scene_mode", "room")
+                self.pet.y = self._clamp_y(state["pos_y"])
                 if hasattr(self.character.state, "mood"):
                     self.character.state.mood = state.get("mood", "neutral")
 
@@ -543,7 +623,6 @@ class DesktopWorldController(QObject):
             print(f"Предупреждение: не удалось загрузить данные из БД: {e}")
 
     def _save_to_db(self) -> None:
-        """Сохраняет текущее состояние персонажа в БД."""
         if not self.db:
             return
         try:
